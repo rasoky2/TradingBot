@@ -1,154 +1,116 @@
-# 📘 Documentación Técnica Avanzada: Flask Trading Bot
+# 📘 Documentación Técnica del Sistema de Trading Algorítmico
 
-Este documento sirve como referencia exhaustiva para la arquitectura, lógica de trading y matemáticas subyacentes del sistema. Se detallan las 4 estrategias activas y sus condiciones exactas.
-
----
-
-## 🏛️ Arquitectura del Sistema
-
-El sistema opera bajo un modelo de **Monolito Modular** diseñado para el análisis técnico en tiempo real en el timeframe Diario (1D).
-
-### Flujo de Datos
-
-1.  **Ingesta**: Descarga de velas OHLCV desde Binance mediante `ccxt`.
-2.  **Cálculo**: Procesamiento vectorizado con `pandas` para generar indicadores.
-3.  **Ejecución**: Evaluación paralela de 4 estrategias independientes.
-4.  **Visualización**: Dashboard con gráficos interactivos (`Lightweight Charts`) y conexión WebSocket.
+**Versión:** 2.1 (ML Enhanced)
+**Arquitectura:** Python Flask + Pandas/Numpy + CCXT + Scikit-Learn
+**Enfoque:** Swing Trading Diario (1D)
 
 ---
 
-## 🧠 Estrategia 1: CryptoSwing V1 (Master)
+## 1. Módulo de Inteligencia Artificial (ML) 🤖
 
-_Archivo: `app/strategies/crypto_swing_v1.py`_
+El sistema incorpora un motor de predicción basado en **Random Forest Classifier** (`scikit-learn`) que opera en tiempo real.
 
-Esta es la estrategia principal, diseñada con lógica de **Cambio de Régimen (Regime Switching)**. Adapta su comportamiento según si el mercado está en Tendencia o en Rango.
+### Función
 
-### A. Filtro de Régimen (El Cerebro)
+Predecir la **Probabilidad Direccional** de la siguiente vela (Cierre Diario t+1 > Cierre Diario t).
 
-El bot decide primero el estado del mercado:
+### Arquitectura del Modelo
 
-- **Modo TREND_UP (Tendencia Alcista)**:
-  - ADX (14) > 25 (Tendencia Fuerte)
-  - Precio > SMA (200) (Tendencia Secular Alcista)
-  - Pendiente SMA (200) > 0 (Tendencia Acelerando)
-- **Modo RANGE (Rango/Lateral)**:
-  - Cualquier estado que no cumpla todas las condiciones anteriores.
-
-### B. Lógica de Entrada
-
-- **En TREND_UP (Breakout)**:
-  - Condición: Precio de Cierre > Canal Donchian Superior (20 días, desplazado 1 día).
-  - Filosofía: Comprar fortaleza en nuevos máximos.
-- **En RANGE (Mean Reversion)**:
-  - Condición: (Precio < Banda Bollinger Inferior) **Y** (RSI < 35).
-  - Filosofía: Comprar barato con sobreventa confirmada.
-
-### C. Lógica de Salida
-
-- **Trend Exit**: Precio rompe el Canal Donchian Inferior (10 días).
-- **Range Exit**: Precio toca la Banda Bollinger Media (SMA 20).
-- **Stop Loss Catastrófico (ATR Ratchet)**:
-  - Nivel: Máximo de 20 días - (3.0 \* ATR 14).
-  - Acción: Si el precio cierra por debajo, venta inmediata.
+- **Algoritmo:** RandomForestClassifier (n_estimators=100, max_depth=5).
+- **Entrenamiento:** JIT (Just-In-Time) con las últimas 500 velas.
+- **Variables Predictivas (Features):**
+  1.  **RSI (14):** Sobrecompra/Sobreventa.
+  2.  **MACD (12, 26, 9):** Tendencia y momentum.
+  3.  **MACD Histogram:** Fuerza de la tendencia.
+  4.  **Bollinger Width:** Volatilidad del mercado (Squeeze detection).
+  5.  **Momentum (PCT Change):** Velocidad del cambio de precio (1d y 3d).
+- **Target:** Clasificación Binaria (1 = Alcista, 0 = Bajista).
+- **Salida:** Probabilidad de confianza (ej. 78% Alcista).
 
 ---
 
-## 📈 Estrategia 2: Classic Trend (RSI + Bollinger)
+## 2. Estrategia Maestra: CryptoSwing V1 👑
 
-_Archivo: `app/strategies/trend_strategy.py`_
+Es la estrategia principal diseñada para adaptarse al régimen de mercado. No utiliza una lógica única, sino que detecta el entorno y cambia su comportamiento.
 
-A pesar de su nombre, es una estrategia clásica de **"Buy the Dip" (Comprar la Caída)** en tendencias alcistas profundas.
+### Filtro de Régimen de Mercado
 
-### Indicadores Base
+El autómata clasifica el mercado en 3 estados mutuamente excluyentes:
 
-- **RSI (Relative Strength Index)**: Periodo 14.
-- **Bollinger Bands**: Periodo 20, Desviación Estándar 2.0.
+1.  **BEAR (Bajista):**
 
-### Fórmula de Entrada
+    - _Condición:_ Precio < SMA 200.
+    - _Acción:_ **PROHIBIDO COMPRAR.** El sistema entra en modo defensivo total.
 
-Busca condiciones extremas de sobreventa:
+2.  **TREND_UP (Tendencia Alcista Fuerte):**
 
-- **Condición**: (RSI < 35) **Y** (Precio <= Banda Bollinger Inferior).
+    - _Condición:_ Precio > SMA 200 **Y** ADX(14) > 25.
+    - _Lógica:_ Breakout Trading. Se busca comprar la fuerza.
 
-### Fórmula de Salida
+3.  **RANGE (Lateral/Rango):**
+    - _Condición:_ Precio > SMA 200 **Y** ADX(14) <= 25.
+    - _Lógica:_ Mean Reversion. Se busca comprar en soportes y vender en resistencias.
 
-Busca condiciones de sobrecompra o recuperación total:
+### Reglas de Entrada (Señales)
 
-- **Condición**: (RSI > 70) **O** (Precio >= Banda Bollinger Superior).
+- **En Tendencia (Trend Up):**
+  - Entrada: Ruptura del **Donchian Channel High (20)**. (Nuevo máximo de 20 días).
+- **En Rango (Range):**
+  - Entrada A: **RSI(14) < 30** (Sobreventa Extrema).
+  - Entrada B: Precio < **Bollinger Band Lower (20, 2.5)**.
 
----
+### Reglas de Salida (Gestión de Posición)
 
-## 🚀 Estrategia 3: Momentum MACD
-
-_Archivo: `app/strategies/macd_strategy.py`_
-
-Estrategia de **Seguimiento de Tendencia (Trend Following)** basada en el momentum puro del precio. Busca capturar el inicio de grandes movimientos.
-
-### Indicadores Base
-
-- **MACD Line**: EMA(12) - EMA(26).
-- **Signal Line**: EMA(9) de la línea MACD.
-- **Histograma**: MACD - Signal.
-
-### Fórmula de Entrada (Golden Cross)
-
-Busca el cruce alcista, pero solo cuando el activo está "barato" (bajo cero).
-
-- **Condición**:
-  1.  MACD > Signal (Cruce actual).
-  2.  MACD[Ayer] <= Signal[Ayer] (Confirmación de cruce).
-  3.  MACD < 0 (El cruce ocurre en zona negativa/recuperación).
-
-### Fórmula de Salida (Death Cross)
-
-- **Condición**: MACD < Signal (Cruce bajista confirmado).
+- **Salida Técnica (Global):** Stoploss fijo de emergencia en -15%.
+- **Salida Dinámica (Trend):**
+  - Cierre por debajo del **Donchian Channel Low (20)**.
+  - **ATR Ratchet Stop:** Chandelier Exit modificado (Máximo de 20 días - 3x ATR).
+- **Salida Dinámica (Range):**
+  - **RSI(14) > 70** (Sobrecompra).
+  - Precio toca **Bollinger Band Upper (20, 2.5)**.
 
 ---
 
-## � Estrategia 4: Volatilidad Bollinger
+## 3. Estrategias Secundarias (Validación)
 
-_Archivo: `app/strategies/bollinger_strategy.py`_
+El sistema ejecuta en paralelo 3 estrategias clásicas para validar la señal maestra.
 
-Estrategia pura de **Reversión a la Media (Mean Reversion)** basada en la volatilidad estadística. Asume que el precio siempre vuelve a su promedio.
+### A. Classic Trend (RSI + Bollinger) 📉
 
-### Indicadores Base
+Estrategia de **Reversión a la Media**. Busca comprar caídas (dips) en tendencias alcistas.
 
-- **Bollinger Bands**: SMA de 20 periodos +/- 2 Desviaciones Estándar.
+- **Entrada:** RSI(14) < 35 **Y** Precio < Banda Bollinger Inferior (20, 2.0).
+- **Salida:** RSI(14) > 70 **O** Precio > Banda Bollinger Superior.
+- **Nivel Neutro (Donde espera comprar):** Banda Bollinger Inferior.
 
-### Fórmula de Entrada
+### B. Momentum MACD 🚀
 
-- **Condición**: Precio < Banda Bollinger Inferior.
-  - Significado: El precio está estadísticamente "barato" (fuera del 95% de probabilidad normal).
+Estrategia de **Seguimiento de Tendencia**. Busca confirmar cambios de dirección.
 
-### Fórmula de Salida
+- **Entrada (Golden Cross):**
+  - Línea MACD cruza ARRIBA de la Señal.
+  - Confirmación: Cruce ocurrió en zona negativa (MACD < 0).
+- **Salida (Death Cross):**
+  - Línea MACD cruza ABAJO de la Señal.
+- **Nivel Neutro (Donde espera comprar):** EMA 26 (Soporte dinámico) o Nivel de Breakout.
+  - _Nota:_ A veces este nivel es superior al precio actual, indicando que se requiere una subida (confirmación) antes de entrar.
 
-- **Condición**: Precio > Banda Bollinger Superior.
-  - Significado: El precio está estadísticamente "caro".
+### C. Volatilidad Bollinger 📊
 
----
+Estrategia pura de volatilidad estadística.
 
-## 🛡️ Gestión de Riesgo Global
-
-El sistema aplica capas de seguridad transversales a todas las estrategias:
-
-### 1. Kill Switch
-
-- **Configuración**: `stoploss: -0.99`.
-- **Función**: Desactiva el stop loss fijo porcentual para dar control total a la lógica algorítmica.
-
-### 2. Validación de Señales (Lookahead Bias)
-
-Todas las estrategias utilizan `.shift(1)` o comparan el cierre de la vela actual confirmada. Nunca se opera "adivinando" el cierre de una vela en formación.
-
-### 3. Fiabilidad Normalizada (Score 0-100%)
-
-Para asistir la decisión humana, se calcula un score matemático:
-
-- **MACD**: Compara el histograma actual contra el máximo de los últimos 20 días.
-- **RSI**: Penaliza la fiabilidad si el RSI está en zona neutra (40-60).
-- **Tendencia**: Premia el ADX alto (>25).
+- **Entrada:** Precio cierra FUERA de la Banda Inferior (2 std).
+- **Salida:** Precio cierra FUERA de la Banda Superior (2 std).
 
 ---
 
-**Versión del Documento**: 2.0 (Full Detail - No Tables)
-**Fecha**: Diciembre 2025
+## 4. Gestión de Riesgo Global 🛡️
+
+El "Risk Engine" del bot actúa como árbitro final:
+
+- **Kill Switch:** Stoploss duro configurado en `config.json` (-99% para delegar, pero la estrategia usa internamente stops técnicos del 5-15%).
+- **ROI (Retorno de Inversión):**
+  - El sistema intenta dejar correr las ganancias (Trend Following).
+  - Solo toma beneficios parciales rápidos si la señal se debilita.
+- **Niveles Visuales:**
+  - El dashboard muestra "ENTRADA", "STOP" y "TARGET" calculados dinámicamente según la volatilidad actual (ATR) de cada activo.

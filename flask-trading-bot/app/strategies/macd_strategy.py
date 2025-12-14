@@ -26,6 +26,7 @@ class MacdStrategy(BaseStrategy):
         ema12 = closes.ewm(span=12, adjust=False).mean()
         # EMA 26
         ema26 = closes.ewm(span=26, adjust=False).mean()
+        dataframe['ema_26'] = ema26
         
         # MACD Line = EMA12 - EMA26
         dataframe['macd'] = ema12 - ema26

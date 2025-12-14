@@ -195,6 +195,18 @@ def analyze_pair(pair: str):
             target = last.get('bb_upper', latest_close)
             stop = entry * 0.97
             
+        elif meta["id"] == "trend":
+            # Classic Trend: Espera caída a Banda Inferior
+            entry = last.get('bb_lower', latest_close * 0.98)
+            stop = entry * 0.94
+            target = last.get('bb_mid', latest_close * 1.05)
+            
+        elif meta["id"] == "macd":
+            # Momentum MACD: Soporte en EMA 26
+            entry = last.get('ema_26', latest_close * 0.99)
+            stop = entry * 0.95
+            target = latest_close * 1.08
+            
         else:
             # Genéricos
             if signal == "COMPRA":
@@ -287,6 +299,15 @@ def analyze_pair(pair: str):
     # Extraer métricas resumen del Swing V1 (que siempre es el primero 0)
     swing_data = detailed_results[0]
     
+    # --- AI PREDICTION LAYER ---
+    ai_result = None
+    try:
+        from app.ai_predictor import AIPredictor
+        predictor = AIPredictor()
+        ai_result = predictor.predict(df)
+    except Exception as e:
+        print(f"AI Error: {e}")
+
     return jsonify({
         "pair": pair,
         "price": latest_close,
@@ -297,6 +318,9 @@ def analyze_pair(pair: str):
         "regime": "MULTI-STRAT", 
         "adx": 0, # Ya está en el detalle si se quiere
         
+        # AI DATA
+        "ai_analysis": ai_result,
+
         # LISTA COMPLETA DE ESTRATEGIAS
         "strategies": detailed_results,
         
