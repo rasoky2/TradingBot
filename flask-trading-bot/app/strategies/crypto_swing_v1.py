@@ -1,85 +1,83 @@
 from .base_strategy import BaseStrategy
 import pandas as pd
+import pandas_ta as ta
 import numpy as np
 
 class CryptoSwingV1(BaseStrategy):
     """
     Crypto Swing V1 (Long-only) — Timeframe 1D
-    Estrategia de Régimen Adaptativo: Trend Following + Mean Reversion
+    Estrategia de Régimen Adaptativo: Trend, Range & Bear Defense
     """
     
     # Configuración General
     timeframe = '1d'
     
-    # ROI: Muy relajado, buscamos tendencias largas, dejamos correr ganancias
-    # No queremos que el ROI nos saque prematuramente si la tendencia es fuerte
-    minimal_roi = {
-        "0": 100.0  # Desactivamos ROI por tiempo básicamente, salida por señal técnica
-    }
+    # ROI: Desactivado (100%), salida controlada por señal técnica
+    minimal_roi = { "0": 100.0 }
     
-    # Stoploss BASE (Risk Engine manda, pero este es el hard stop máximo)
-    stoploss = -0.15 
+    # Kill Switch Global (Stoploss de emergencia)
+    stoploss = -0.99 
     
     def populate_indicators(self, df):
-        # --- 1. Indicadores Generales ---
+        # --- 1. Indicadores Generales (Pandas TA) ---
         closes = df['close']
         highs = df['high']
         lows = df['low']
         
-        # SMA 200 y Slope (Pendiente 10 días)
-        df['sma_200'] = closes.rolling(window=200).mean()
-        df['sma_200_slope'] = df['sma_200'].diff(10) # Cambio en 10 días
+        # SMA 200 y Slope
+        df['sma_200'] = ta.sma(closes, length=200)
+        # Calculamos slope manualmente porque ta.slope a veces varía en implementación
+        df['sma_200_slope'] = df['sma_200'].diff(10)
         
-        # True Range (para ATR y ADX)
-        df['tr1'] = highs - lows
-        df['tr2'] = (highs - closes.shift()).abs()
-        df['tr3'] = (lows - closes.shift()).abs()
-        df['tr'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+        # ATR 14 (Standard Wilder)
+        df['atr_14'] = ta.atr(highs, lows, closes, length=14)
         
-        # ATR 14
-        df['atr_14'] = df['tr'].rolling(window=14).mean() # Aproximación SMA para ATR
+        # ADX 14 (Standard Wilder)
+        # pandas_ta devuelve un DF con ADX_14, DMP_14, DMN_14
+        adx_df = ta.adx(highs, lows, closes, length=14)
+        df['adx'] = adx_df['ADX_14']
         
-        # --- 2. Cálculo ADX (Manual Simplificado) ---
-        plus_dm = highs.diff()
-        minus_dm = lows.diff()
-        plus_dm[plus_dm < 0] = 0
-        minus_dm[minus_dm > 0] = 0
-        
-        df['plus_di'] = 100 * (plus_dm.ewm(alpha=1/14).mean() / df['atr_14'])
-        df['minus_di'] = 100 * (minus_dm.abs().ewm(alpha=1/14).mean() / df['atr_14'])
-        dx = (df['plus_di'] - df['minus_di']).abs() / (df['plus_di'] + df['minus_di']) * 100
-        df['adx'] = dx.rolling(window=14).mean()
-        
-        # --- 3. Indicadores Modulo TREND (Donchian) ---
+        # --- 2. Indicadores Modulo TREND (Donchian) ---
         df['donchian_high_20'] = highs.rolling(window=20).max()
         df['donchian_low_10'] = lows.rolling(window=10).min()
         
         # Trailing Ratchet (Chandelier Exit Proxy)
         # Highest High reciente (20d) - 3 * ATR
+        # Nota: En sistemas 'Real Money', usaríamos un acumulador trade-aware.
         df['trend_atr_stop'] = df['donchian_high_20'] - (df['atr_14'] * 3.0)
         
-        # --- 4. Indicadores Modulo RANGE (Bollinger) ---
-        sma_20 = closes.rolling(window=20).mean()
-        std_20 = closes.rolling(window=20).std()
-        df['bb_upper'] = sma_20 + (std_20 * 2)
-        df['bb_lower'] = sma_20 - (std_20 * 2)
-        df['bb_mid'] = sma_20
+        # --- 3. Indicadores Modulo RANGE (Bollinger & RSI) ---
+        # Bollinger Bands (20, 2.0)
+        bb = ta.bbands(closes, length=20, std=2.0)
+        df['bb_upper'] = bb['BBU_20_2.0']
+        df['bb_lower'] = bb['BBL_20_2.0']
+        df['bb_mid'] = bb['BBM_20_2.0']
         
-        # RSI 14 (Opcional del filtro range)
-        delta = closes.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        df['rsi'] = 100 - (100 / (1 + rs))
+        # RSI 14
+        df['rsi'] = ta.rsi(closes, length=14)
         
-        # --- 5. REGIME FILTER ---
-        # TREND_UP: ADX>25 y Price > SMA200 y SMA200 subiendo
-        condition_trend = (
+        # --- 4. REGIME FILTER (3 Estados) ---
+        # Estado 1: TREND_UP (Alcista Fuerte)
+        # ADX>25, Precio > SMA200, SMA subiendo
+        cond_trend = (
             (df['adx'] > 25) &
             (closes > df['sma_200']) &
             (df['sma_200_slope'] > 0)
         )
-        df['regime'] = np.where(condition_trend, 'TREND_UP', 'RANGE')
+        
+        # Estado 2: RANGE (Indeciso pero Seguro)
+        # No es tendencia fuerte, pero estamos SOBRE la SMA200 (Bullish bias)
+        cond_range = (
+            (closes > df['sma_200']) &
+            (~cond_trend)
+        )
+        
+        # Estado 3: BEAR (Bajista / Peligro) - Default
+        # Debajo de SMA200 -> PROHIBIDO OPERAR LONG
+        
+        df['regime'] = 'BEAR'
+        df.loc[cond_range, 'regime'] = 'RANGE'
+        df.loc[cond_trend, 'regime'] = 'TREND_UP'
         
         return df
 
@@ -89,15 +87,18 @@ class CryptoSwingV1(BaseStrategy):
         # LOGICA 1: TREND MODE (Donchian Breakout)
         cond_trend_entry = (
             (df['regime'] == 'TREND_UP') &
-            (df['close'] > df['donchian_high_20'].shift(1)) # Breakout ayer confirmado hoy
+            (df['close'] > df['donchian_high_20'].shift(1)) # Breakout confirmado
         )
         
         # LOGICA 2: RANGE MODE (Bollinger Mean Reversion)
+        # Solo entramos en rango si estamos sobre SMA200 (Regime=RANGE garantiza esto)
         cond_range_entry = (
             (df['regime'] == 'RANGE') &
             (df['close'] < df['bb_lower']) &
-            (df['rsi'] < 35) # Filtro RSI activado
+            (df['rsi'] < 35)
         )
+        
+        # NOTA: En BEAR no hay entradas.
         
         df.loc[cond_trend_entry | cond_range_entry, 'enter_long'] = 1
         return df
