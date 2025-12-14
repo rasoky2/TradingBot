@@ -252,6 +252,40 @@ endblock %} {% block content %}
     }
   }
 
+      // --- Lógica de Visualización de Estrategias ---
+      let globalStrategies = [];
+      let activePriceLines = [];
+
+      window.focusStrategy = function(index) {
+          if (!candleSeries || !globalStrategies[index]) return;
+          const strat = globalStrategies[index];
+          
+          // Limpiar líneas anteriores
+          activePriceLines.forEach(line => candleSeries.removePriceLine(line));
+          activePriceLines = [];
+          
+          const levels = strat.levels;
+
+          // TARGET (Green)
+          if (levels.target && !isNaN(parseFloat(levels.target))) {
+             activePriceLines.push(candleSeries.createPriceLine({
+                 price: parseFloat(levels.target), color: '#10b981', lineWidth: 2, lineStyle: 0, title: 'TARGET', axisLabelVisible: true
+             }));
+          }
+           // ENTRY (Blue)
+          if (levels.entry && !isNaN(parseFloat(levels.entry))) {
+             activePriceLines.push(candleSeries.createPriceLine({
+                 price: parseFloat(levels.entry), color: '#3b82f6', lineWidth: 2, lineStyle: 2, title: 'ENTRY', axisLabelVisible: true
+             }));
+          }
+           // STOP (Red)
+          if (levels.stop && !isNaN(parseFloat(levels.stop))) {
+             activePriceLines.push(candleSeries.createPriceLine({
+                 price: parseFloat(levels.stop), color: '#ef4444', lineWidth: 2, lineStyle: 0, title: 'STOP', axisLabelVisible: true
+             }));
+          }
+      };
+
   // Conectar WebSocket Binance (Precio Real-Time)
   function initRealTimePrice() {
     // Stream de trades para btcusdt
@@ -412,19 +446,21 @@ endblock %} {% block content %}
         // --- Renderizar MATRIZ de Estrategias (Consejo) ---
         const matrixContainer = document.getElementById("strategies-matrix");
         if (matrixContainer && data.strategies) {
-           matrixContainer.innerHTML = data.strategies.map(s => {
+           globalStrategies = data.strategies; // Actualizar referencia global
+
+           matrixContainer.innerHTML = data.strategies.map((s, index) => {
                // Determinar colores base
                let baseColor = 'gray'; // Neutral
                if (s.signal === 'COMPRA') baseColor = 'emerald';
                if (s.signal === 'VENTA') baseColor = 'red';
                if (s.signal === 'WAIT' || s.signal === 'NEUTRAL') baseColor = 'amber';
                
-               // Tarjeta individual
+               // Tarjeta individual INTERACTIVA
                return `
-               <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+               <div onclick="focusStrategy(${index})" class="group cursor-pointer bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-400 transition-all active:scale-95 relative">
                    <div class="flex justify-between items-start mb-2">
                        <div class="max-w-[70%]">
-                           <div class="text-xs font-bold text-gray-700 uppercase tracking-tight truncate" title="${s.name}">${s.name}</div>
+                           <div class="text-xs font-bold text-gray-700 uppercase tracking-tight truncate group-hover:text-blue-600 transition-colors" title="${s.name}">${s.name}</div>
                            <div class="text-[10px] text-gray-400 truncate">${s.desc || '-'}</div>
                        </div>
                        <span class="px-2 py-0.5 rounded text-[10px] font-bold border bg-${baseColor}-50 text-${baseColor}-700 border-${baseColor}-100">
@@ -432,7 +468,7 @@ endblock %} {% block content %}
                        </span>
                    </div>
                    
-                   <div class="mt-4 pt-3 border-t border-gray-50 space-y-2">
+                   <div class="mt-4 pt-3 border-t border-gray-50 space-y-2 pointer-events-none">
                        <div class="flex justify-between items-center bg-gray-50 p-1.5 rounded">
                            <span class="text-[10px] font-medium text-gray-500">ENTRADA</span>
                            <span class="text-xs font-mono font-bold text-gray-700">$${s.levels.entry}</span>
@@ -447,11 +483,16 @@ endblock %} {% block content %}
                        </div>
                    </div>
                    
-                   <div class="mt-3 flex items-center gap-2">
+                   <div class="mt-3 flex items-center gap-2 pointer-events-none">
                        <div class="flex-1 bg-gray-100 rounded-full h-1">
                            <div class="bg-${baseColor}-500 h-1 rounded-fullTransition" style="width: ${s.reliability}%"></div>
                        </div>
                        <span class="text-[9px] text-gray-400 font-medium">${s.reliability}%</span>
+                   </div>
+
+                   <!-- Icono Hover -->
+                   <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i data-lucide="crosshair" class="w-4 h-4 text-blue-400"></i>
                    </div>
                </div>
                `;
