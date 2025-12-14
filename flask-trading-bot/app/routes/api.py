@@ -243,10 +243,19 @@ def analyze_pair(pair: str):
             reliability = 85 - (dist_to_edge * 100) # Centro -> 35%, Borde -> 85%
             
         elif meta["id"] == "macd":
-            # Basado en histograma
-            hist = abs(last.get('macdhist', 0))
-            # Normalización rápida (suponiendo precio BTC, hist ~ 10-100)
-            reliability = 40 + (hist * 0.5) 
+            # Basado en fuerza relativa del Histograma (vs recientes)
+            curr_hist = abs(last.get('macdhist', 0))
+            # Buscamos el máximo histograma de las últimas 20 velas para normalizar
+            # Evitamos división por cero
+            measure_period = 20
+            # Usando abs() sobre la serie completa para obtener magnitud
+            recent_max_hist = df['macdhist'].abs().rolling(measure_period).max().iloc[-1]
+            if recent_max_hist == 0: recent_max_hist = 1
+            
+            hist_strength = curr_hist / recent_max_hist # 0.0 a 1.0
+            
+            # Fiabilidad base 40%, + hasta 50% extra por fuerza
+            reliability = 40 + (hist_strength * 50) 
 
         # Ajuste final si hay señal activa (Bonus de confianza)
         if signal != "NEUTRAL":
