@@ -1,0 +1,48 @@
+# Flask Core
+Flask
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-CORS
+Flask-SocketIO
+Flask-JWT-Extended
+
+# Trading & Data
+ccxt
+pandas
+numpy
+bottleneck
+numexpr
+
+# Indicadores Técnicos
+ft-pandas-ta
+ta-lib
+technical
+
+# Database
+SQLAlchemy
+alembic
+
+# Utils
+python-dateutil
+pytz
+requests
+urllib3
+certifi
+jsonschema
+tabulate
+humanize
+cachetools
+joblib
+rich
+
+# JSON
+python-rapidjson
+orjson
+
+# Server
+gunicorn
+python-socketio
+eventlet
+
+# Development
+python-dotenv

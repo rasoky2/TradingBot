@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Flask Trading Bot{% endblock %}</title>
+
+    <!-- Fuente Inter (Estándar Fintech) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+            },
+            colors: {
+              primary: "#2563eb", // Blue 600
+              success: "#10b981", // Emerald 500
+              danger: "#ef4444", // Red 500
+              warning: "#f59e0b", // Amber 500
+              dark: "#111827", // Gray 900
+            },
+          },
+        },
+      };
+    </script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Estilos Personalizados (mínimos para overriding) -->
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f3f4f6;
+      }
+      .glass-panel {
+        background: white;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1),
+          0 1px 2px -1px rgb(0 0 0 / 0.1);
+      }
+    </style>
+    {% block extra_css %}{% endblock %}
+  </head>
+  <body class="text-gray-800 antialiased min-h-screen flex flex-col">
+    <!-- Navbar con diseño profesional -->
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+          <div class="flex items-center gap-4">
+            <!-- Logo / Nombre -->
+            <div class="flex-shrink-0 flex items-center gap-2">
+              <i data-lucide="bot" class="text-primary w-8 h-8"></i>
+              <span class="font-bold text-xl tracking-tight text-gray-900"
+                >{{ config.bot_name }}</span
+              >
+            </div>
+
+            <!-- Badge de Estado -->
+            <span
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ 'bg-amber-100 text-amber-800' if config.dry_run else 'bg-emerald-100 text-emerald-800' }}"
+            >
+              {{ 'DRY RUN' if config.dry_run else 'LIVE' }}
+            </span>
+          </div>
+
+          <!-- Menú Desktop -->
+          <div class="hidden sm:flex sm:items-center sm:space-x-8">
+            <a
+              href="/"
+              class="text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-primary text-sm font-medium"
+              >Dashboard</a
+            >
+            <a
+              href="/trades"
+              class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+              >Trades</a
+            >
+            <a
+              href="/config"
+              class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+              >Configuración</a
+            >
+          </div>
+
+          <!-- Botón Móvil (Icono) -->
+          <div class="flex items-center sm:hidden">
+            <button
+              type="button"
+              class="text-gray-500 hover:text-gray-600 focus:outline-none"
+            >
+              <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Contenido Principal -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer Minimalista -->
+    <footer class="bg-white border-t border-gray-200 mt-auto">
+      <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <p
+          class="text-center text-sm text-gray-500 flex items-center justify-center gap-2"
+        >
+          <span>&copy; 2025 Flask Trading Bot</span>
+          <span class="text-gray-300">|</span>
+          <span class="flex items-center gap-1"
+            ><i data-lucide="zap" class="w-3 h-3 text-yellow-500"></i> Powered
+            by Python & Flask</span
+          >
+        </p>
+      </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+      // Inicializar Iconos Lucide
+      lucide.createIcons();
+    </script>
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>

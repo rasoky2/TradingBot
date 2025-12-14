@@ -1,0 +1,504 @@
+{% extends "base.html" %} {% block title %}Advisor - Flask Trading Bot{%
+endblock %} {% block content %}
+<div class="space-y-6">
+  <!-- Header de Página -->
+  <div class="md:flex md:items-center md:justify-between">
+    <div class="flex-1 min-w-0">
+      <h2
+        class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate flex items-center gap-2"
+      >
+        <i data-lucide="activity" class="text-primary w-8 h-8"></i>
+        Crypto Advisor
+      </h2>
+      <p class="mt-1 text-sm text-gray-500">
+        Análisis en tiempo real para <strong>BTC/USDT</strong>
+      </p>
+    </div>
+    <div class="mt-4 flex md:mt-0 md:ml-4 gap-2">
+      <button
+        type="button"
+        onclick="loadAnalysis(); loadChartData();"
+        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
+      >
+        <i data-lucide="refresh-cw" class="w-4 h-4 mr-2 text-gray-500"></i>
+        Actualizar
+      </button>
+      <span class="ml-3 inline-flex rounded-md shadow-sm">
+        <div
+          id="current-price-badge"
+          class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-primary transition-colors duration-300"
+        >
+          Cargando precio...
+        </div>
+      </span>
+    </div>
+  </div>
+
+  <!-- Grid de Métricas Principales -->
+  <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <!-- Tarjeta 1: Fiabilidad -->
+    <div
+      class="bg-white overflow-hidden shadow rounded-lg border border-gray-200 relative group hover:shadow-md transition-shadow"
+    >
+      <div class="p-5">
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <i data-lucide="bar-chart-2" class="h-6 w-6 text-gray-400"></i>
+          </div>
+          <div class="ml-5 w-0 flex-1">
+            <dl>
+              <dt class="text-sm font-medium text-gray-500 truncate">
+                Fiabilidad de Compra
+              </dt>
+              <dd class="flex items-baseline">
+                <div
+                  class="text-2xl font-semibold text-gray-900"
+                  id="reliability-value"
+                >
+                  --%
+                </div>
+                <div
+                  id="reliability-rec"
+                  class="ml-2 flex items-baseline text-sm font-semibold text-gray-500"
+                >
+                  Analizando...
+                </div>
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+      <!-- Barra de progreso inferior -->
+      <div class="bg-gray-50 px-5 py-3">
+        <div class="w-full bg-gray-200 rounded-full h-2.5">
+          <div
+            id="reliability-bar"
+            class="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
+            style="width: 0%"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tarjeta 2: Tendencia -->
+    <div
+      class="bg-white overflow-hidden shadow rounded-lg border border-gray-200 group hover:shadow-md transition-shadow"
+    >
+      <div class="p-5">
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <i data-lucide="trending-up" class="h-6 w-6 text-gray-400"></i>
+          </div>
+          <div class="ml-5 w-0 flex-1">
+            <dl>
+              <dt class="text-sm font-medium text-gray-500 truncate">
+                Tendencia Mercado
+              </dt>
+              <dd>
+                <div class="text-lg font-bold text-gray-900" id="trend-market">
+                  Cargando...
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Medias Móviles Simples</p>
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+    <!-- Tarjeta 4: RSI -->
+    <div
+      class="bg-white overflow-hidden shadow rounded-lg border border-gray-200 group hover:shadow-md transition-shadow"
+    >
+      <div class="p-5">
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <i data-lucide="waves" class="h-6 w-6 text-gray-400"></i>
+          </div>
+          <div class="ml-5 w-0 flex-1">
+            <dl>
+              <dt class="text-sm font-medium text-gray-500 truncate">
+                Indicador RSI (14)
+              </dt>
+              <dd>
+                <div class="text-3xl font-bold text-gray-900" id="rsi-value">
+                  --
+                </div>
+                <div class="text-xs text-gray-400 mt-1">
+                  <span class="text-emerald-500">&lt;30 Compra</span> |
+                  <span class="text-red-500">&gt;70 Venta</span>
+                </div>
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sección de Gráfico -->
+  <div class="bg-white shadow rounded-lg border border-gray-200">
+    <div
+      class="px-5 py-4 border-b border-gray-200 flex justify-between items-center"
+    >
+      <h3
+        class="text-lg leading-6 font-medium text-gray-900 flex items-center gap-2"
+      >
+        <i data-lucide="calendar" class="w-5 h-5 text-purple-500"></i>
+        Gráfico Diario (24H)
+      </h3>
+      <div class="flex gap-2">
+        <span
+          class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+        >
+          1D
+        </span>
+        <span
+          class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800"
+        >
+          Binance Data
+        </span>
+      </div>
+    </div>
+    <div class="p-1">
+      <div id="tv-chart-container" class="w-full h-[500px]"></div>
+    </div>
+  </div>
+  </div>
+
+  <!-- Nueva Sección: Matriz de Estrategias -->
+  <div class="mt-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg leading-6 font-bold text-gray-900 flex items-center gap-2">
+            <i data-lucide="layers" class="w-5 h-5 text-purple-600"></i>
+            Consejo de Estrategias (24H)
+        </h3>
+        <span class="text-xs text-gray-400">Actualizado en tiempo real</span>
+    </div>
+    <div id="strategies-matrix" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- JS Injection Target -->
+    </div>
+  </div>
+
+</div>
+{% endblock %} {% block extra_js %}
+<!-- Librería Gráfica (Versión Estable 4.0.1) -->
+<script src="https://unpkg.com/lightweight-charts@4.0.1/dist/lightweight-charts.standalone.production.js"></script>
+
+<script>
+  // Variables globales
+  let chart;
+  let candleSeries;
+  let ws;
+  let lastPrice = 0;
+
+  // Inicializar gráfico
+  function initChart() {
+    try {
+      const chartContainer = document.getElementById("tv-chart-container");
+
+      if (!window.LightweightCharts) {
+        console.error("Librería LightweightCharts no cargada.");
+        chartContainer.innerHTML =
+          '<div class="flex items-center justify-center h-full text-red-500">Error al cargar librería gráfica</div>';
+        return;
+      }
+
+      chart = LightweightCharts.createChart(chartContainer, {
+        width: chartContainer.clientWidth,
+        height: 500,
+        layout: {
+          backgroundColor: "#ffffff",
+          textColor: "#374151",
+        },
+        grid: {
+          vertLines: { color: "#f3f4f6" },
+          horzLines: { color: "#f3f4f6" },
+        },
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          borderColor: "#e5e7eb",
+        },
+        rightPriceScale: {
+          borderColor: "#e5e7eb",
+        },
+      });
+
+      candleSeries = chart.addCandlestickSeries({
+        upColor: "#10b981",
+        downColor: "#ef4444",
+        borderDownColor: "#ef4444",
+        borderUpColor: "#10b981",
+        wickDownColor: "#ef4444",
+        wickUpColor: "#10b981",
+      });
+
+      // Responsive chart
+      new ResizeObserver((entries) => {
+        if (entries.length === 0 || entries[0].target !== chartContainer) {
+          return;
+        }
+        const newRect = entries[0].contentRect;
+        chart.applyOptions({ width: newRect.width });
+      }).observe(chartContainer);
+    } catch (e) {
+      console.error("Error iniciando gráfico:", e);
+      document.getElementById(
+        "tv-chart-container"
+      ).innerHTML = `<div class="p-4 text-red-500">Error: ${e.message}</div>`;
+    }
+  }
+
+  // Conectar WebSocket Binance (Precio Real-Time)
+  function initRealTimePrice() {
+    // Stream de trades para btcusdt
+    // Docs: https://binance-docs.github.io/apidocs/spot/en/#trade-streams
+    ws = new WebSocket("wss://stream.binance.com:9443/ws/btcusdt@trade");
+
+    const priceBadge = document.getElementById("current-price-badge");
+    const originalTitle = "Advisor - Flask Trading Bot";
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const price = parseFloat(data.p);
+
+      // Actualizar Texto
+      priceBadge.textContent = price.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+      });
+
+      // Logica de colores (Instantánea)
+      if (price > lastPrice) {
+        // Sube: Emerald
+        priceBadge.classList.remove("bg-red-500", "bg-primary");
+        priceBadge.classList.add("bg-emerald-500");
+        document.title = `↗ ${price.toFixed(2)}`;
+      } else if (price < lastPrice) {
+        // Baja: Red
+        priceBadge.classList.remove("bg-emerald-500", "bg-primary");
+        priceBadge.classList.add("bg-red-500");
+        document.title = `↘ ${price.toFixed(2)}`;
+      }
+
+      lastPrice = price;
+    };
+
+    ws.onerror = (err) => console.log("WS Error", err);
+  }
+
+  // Cargar Análisis Backend (Tendencia GLOBAL y Estrategias)
+  async function loadAnalysis() {
+    try {
+      const response = await fetch("/api/analysis/BTC/USDT");
+      if (!response.ok) throw new Error("Error analysis");
+      const data = await response.json();
+
+      // --- 1. Fiabilidad Global ---
+      const rsiEl = document.getElementById("rsi-value");
+      rsiEl.textContent = data.rsi;
+      if (data.rsi < 30)
+        rsiEl.className = "text-3xl font-bold text-emerald-600";
+      else if (data.rsi > 70)
+        rsiEl.className = "text-3xl font-bold text-red-600";
+      else rsiEl.className = "text-3xl font-bold text-gray-900";
+
+      document.getElementById(
+        "reliability-value"
+      ).textContent = `${data.reliability}%`;
+      document.getElementById("reliability-rec").textContent =
+        data.recommendation;
+      document.getElementById(
+        "reliability-bar"
+      ).style.width = `${data.reliability}%`;
+
+      // --- 2. Renderizar Estrategias Individuales ---
+
+      // CORRECCIÓN: Usar la señal de la primera estrategia en lugar de data.trend
+      const trendEl = document.getElementById("trend-market");
+      if (data.strategies && data.strategies.length > 0) {
+        // Estrategia 0 es TrendStrategy
+        const mainStrat = data.strategies[0];
+        trendEl.textContent = mainStrat.signal;
+
+        // Asignar color según señal
+        trendEl.className = "text-lg font-bold"; // Reset
+        if (mainStrat.signal === "COMPRA")
+          trendEl.classList.add("text-emerald-600");
+        else if (mainStrat.signal === "VENTA")
+          trendEl.classList.add("text-red-600");
+        else trendEl.classList.add("text-gray-500");
+      }
+
+      // Crear/Actualizar Tabla de Estrategias
+      const strategiesContainer = { innerHTML: '' }; // Dummy fix: Evitar error por elemento eliminado
+      if (data.strategies) {
+        // Renderizado COMPONENTE CryptoSwing V1 (Avanzado)
+        let html = `
+            <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <!-- Data Header -->
+                <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
+                    <span class="text-xs font-bold ${
+                      data.regime === "TREND_UP"
+                        ? "text-purple-600"
+                        : "text-orange-600"
+                    } flex items-center gap-1">
+                        <i data-lucide="${
+                          data.regime === "TREND_UP"
+                            ? "trending-up"
+                            : "activity"
+                        }" class="w-3 h-3"></i>
+                        ${data.regime}
+                    </span>
+                    <span class="text-[10px] font-mono text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-100">
+                        ADX: ${data.adx}
+                    </span>
+                </div>
+
+                <!-- Signal Box -->
+                <div class="mb-3 text-center">
+                     <span class="block text-[10px] text-gray-400 uppercase tracking-widest mb-1">Recomendación Actual</span>
+                     <span class="text-xl font-black ${
+                       data.recommendation === "COMPRA"
+                         ? "text-emerald-500"
+                         : data.recommendation === "VENTA"
+                         ? "text-red-500"
+                         : "text-amber-500"
+                     }">
+                        ${data.recommendation}
+                     </span>
+                </div>
+
+                <!-- Action Levels Grid -->
+                <div class="grid grid-cols-3 gap-2">
+                    <!-- Entry -->
+                    <div class="bg-white p-2 rounded border border-emerald-100 text-center shadow-sm">
+                        <div class="text-[9px] text-gray-400 uppercase mb-0.5">Entrada</div>
+                        <div class="text-xs font-bold text-gray-800">$${
+                          data.levels.entry
+                        }</div>
+                    </div>
+                    <!-- Stop -->
+                    <div class="bg-white p-2 rounded border border-red-100 text-center shadow-sm">
+                        <div class="text-[9px] text-gray-400 uppercase mb-0.5">Stop Loss</div>
+                        <div class="text-xs font-bold text-gray-800">$${
+                          data.levels.stop_loss
+                        }</div>
+                    </div>
+                    <!-- Target -->
+                    <div class="bg-white p-2 rounded border border-blue-100 text-center shadow-sm">
+                        <div class="text-[9px] text-gray-400 uppercase mb-0.5">Objetivo</div>
+                        <div class="text-xs font-bold text-gray-800">$${
+                          data.levels.target
+                        }</div>
+                    </div>
+                </div>
+                
+                <!-- Footer Info -->
+                <div class="mt-3 text-[10px] text-center text-gray-400 italic">
+                    Fiabilidad Algorítmica: <strong>${
+                      data.reliability
+                    }%</strong>
+                </div>
+            </div>
+        `;
+
+        strategiesContainer.innerHTML = html;
+        
+        // --- Renderizar MATRIZ de Estrategias (Consejo) ---
+        const matrixContainer = document.getElementById("strategies-matrix");
+        if (matrixContainer && data.strategies) {
+           matrixContainer.innerHTML = data.strategies.map(s => {
+               // Determinar colores base
+               let baseColor = 'gray'; // Neutral
+               if (s.signal === 'COMPRA') baseColor = 'emerald';
+               if (s.signal === 'VENTA') baseColor = 'red';
+               if (s.signal === 'WAIT' || s.signal === 'NEUTRAL') baseColor = 'amber';
+               
+               // Tarjeta individual
+               return `
+               <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                   <div class="flex justify-between items-start mb-2">
+                       <div class="max-w-[70%]">
+                           <div class="text-xs font-bold text-gray-700 uppercase tracking-tight truncate" title="${s.name}">${s.name}</div>
+                           <div class="text-[10px] text-gray-400 truncate">${s.desc || '-'}</div>
+                       </div>
+                       <span class="px-2 py-0.5 rounded text-[10px] font-bold border bg-${baseColor}-50 text-${baseColor}-700 border-${baseColor}-100">
+                           ${s.signal}
+                       </span>
+                   </div>
+                   
+                   <div class="mt-4 pt-3 border-t border-gray-50 space-y-2">
+                       <div class="flex justify-between items-center bg-gray-50 p-1.5 rounded">
+                           <span class="text-[10px] font-medium text-gray-500">ENTRADA</span>
+                           <span class="text-xs font-mono font-bold text-gray-700">$${s.levels.entry}</span>
+                       </div>
+                       <div class="flex justify-between items-center bg-gray-50 p-1.5 rounded">
+                           <span class="text-[10px] font-medium text-gray-500">STOP</span>
+                           <span class="text-xs font-mono font-bold text-gray-700">$${s.levels.stop}</span>
+                       </div>
+                       <div class="flex justify-between items-center bg-gray-50 p-1.5 rounded">
+                           <span class="text-[10px] font-medium text-gray-500">TARGET</span>
+                           <span class="text-xs font-mono font-bold text-gray-700">$${s.levels.target}</span>
+                       </div>
+                   </div>
+                   
+                   <div class="mt-3 flex items-center gap-2">
+                       <div class="flex-1 bg-gray-100 rounded-full h-1">
+                           <div class="bg-${baseColor}-500 h-1 rounded-fullTransition" style="width: ${s.reliability}%"></div>
+                       </div>
+                       <span class="text-[9px] text-gray-400 font-medium">${s.reliability}%</span>
+                   </div>
+               </div>
+               `;
+           }).join('');
+        }
+        
+        lucide.createIcons(); // Refrescar iconos inyectados
+      }
+    } catch (error) {
+      console.error("Error cargando análisis:", error);
+      // Fallback visual en caso de error
+      document.getElementById("reliability-rec").textContent = "Error Conexión";
+    }
+  }
+
+  // Cargar Historial Gráfico
+  async function loadChartData() {
+    if (!candleSeries) return;
+    try {
+      const response = await fetch("/api/ohlcv/BTC/USDT?limit=200");
+      if (!response.ok) throw new Error("Error chart data");
+      const data = await response.json();
+      const chartData = data.data.map((c) => ({
+        time: c[0] / 1000,
+        open: c[1],
+        high: c[2],
+        low: c[3],
+        close: c[4],
+      }));
+      candleSeries.setData(chartData);
+    } catch (error) {
+      console.error("Error chart:", error);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    lucide.createIcons();
+    initChart();
+    initRealTimePrice(); // WebSocket Start
+    loadAnalysis();
+    loadChartData();
+
+    // Polling solo para análisis lento (cada 10s)
+    setInterval(() => {
+      loadAnalysis();
+      loadChartData();
+    }, 10000);
+  });
+</script>
+{% endblock %}
