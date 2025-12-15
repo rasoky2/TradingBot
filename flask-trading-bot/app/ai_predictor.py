@@ -2,25 +2,24 @@
 import pandas as pd
 import numpy as np
 import pandas_ta as ta
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.model_selection import cross_val_score, TimeSeriesSplit
 
 class AIPredictor:
     """
-    Motor de Predicción Ligero usando Random Forest.
-    Entrena un modelo al vuelo con datos recientes para predecir la dirección de la proxima vela.
+    Motor de Predicción V3 (Turbo) usando HistGradientBoosting.
+    Más rápido y preciso que Random Forest para detectar patrones sutiles.
     """
     
     def __init__(self):
-        # Usamos más estimadores y activamos oob_score para autoevaluación
-        self.model = RandomForestClassifier(
-            n_estimators=200, 
-            max_depth=7, 
-            min_samples_leaf=4,
-            max_features='sqrt',
-            random_state=42,
-            oob_score=True, # Métrica de validación interna gratis
-            n_jobs=-1 # Usar todos los núcleos
+        # Motor Nuevo: Gradient Boosting (LigthGBM inspired)
+        self.model = HistGradientBoostingClassifier(
+            learning_rate=0.05,        # Aprendizaje más fino
+            max_iter=200,              # Más iteraciones (árboles)
+            max_depth=5,               # Profundidad controlada para evitar overfitting
+            l2_regularization=1.0,     # Regularización para generalizar mejor
+            early_stopping=True,       # Parar si deja de mejorar
+            random_state=42
         )
 
     def prepare_data(self, df):
@@ -77,6 +76,9 @@ class AIPredictor:
         data['target'] = np.where(future_close > (current_close + threshold), 1, 0)
         
         data.dropna(inplace=True)
+        # Limpieza de infinitos que a veces genera pandas_ta
+        data.replace([np.inf, -np.inf], np.nan, inplace=True)
+        data.dropna(inplace=True)
         return data
 
     def predict(self, df):
@@ -111,12 +113,14 @@ class AIPredictor:
             
             if len(X) < 100: return None
                 
-            # Entrenar
+            # --- 1. Calcular Accuracy usando Cross-Validation (TimeSeriesSplit) ---
+            # Esto simula mejor el rendimiento en datos futuros que un simple split aleatorio
+            tscv = TimeSeriesSplit(n_splits=3)
+            cv_scores = cross_val_score(self.model, X, y, cv=tscv, scoring='accuracy')
+            quality_score = np.mean(cv_scores)
+
+            # --- 2. Entrenar Modelo Final con TODOS los datos ---
             self.model.fit(X, y)
-            
-            # Métricas de calidad del modelo (OOB Error)
-            # Si el modelo no puede generalizar (score bajo), reducimos la confianza
-            quality_score = self.model.oob_score_ 
             
             # Predecir
             proba_up = self.model.predict_proba(last_candle_features)[0][1]
