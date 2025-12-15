@@ -390,6 +390,7 @@ Analiza este dataset compacto (CSV) de {pair} (1D).
 
 2. SIGNALS & REGIME:
 - Precio: {latest_close}
+- Market Sentiment: {fng_index['value']} ({fng_index['classification']})
 - Regime: {swing_data.get('regime', 'N/A')}
 - ADX Strength: {swing_data.get('adx', 'N/A')}
 
