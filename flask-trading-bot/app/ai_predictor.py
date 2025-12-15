@@ -12,111 +12,134 @@ class AIPredictor:
     """
     
     def __init__(self):
+        # Usamos más estimadores y activamos oob_score para autoevaluación
         self.model = RandomForestClassifier(
-            n_estimators=100, 
-            max_depth=5, 
-            min_samples_leaf=5,
+            n_estimators=200, 
+            max_depth=7, 
+            min_samples_leaf=4,
             max_features='sqrt',
-            random_state=42
+            random_state=42,
+            oob_score=True, # Métrica de validación interna gratis
+            n_jobs=-1 # Usar todos los núcleos
         )
 
     def prepare_data(self, df):
         """
-        Feature Engineering: Crea variables predictivas basadas en TA.
+        Feature Engineering Avanzado
         """
         data = df.copy()
         
-        # 1. Features Técnicos (Entradas del modelo)
-        # RSI
+        # --- 1. Features de Tendencia y Osciladores ---
         data['rsi'] = ta.rsi(data['close'], length=14)
         
-        # MACD
         macd = ta.macd(data['close'])
         data['macd'] = macd['MACD_12_26_9']
         data['macdhist'] = macd['MACDh_12_26_9']
         
-        # ADX (Fuerza de Tendencia) - CRÍTICO
         adx = ta.adx(data['high'], data['low'], data['close'], length=14)
+        # Manejo seguro de ADX
         if adx is not None and 'ADX_14' in adx:
             data['adx'] = adx['ADX_14']
-            data['adx_slope'] = data['adx'].diff() # Pendiente
+            data['adx_slope'] = data['adx'].diff()
         else:
             data['adx'] = 0
             data['adx_slope'] = 0
+            
+        # --- 2. Features de Volatilidad ---
+        data['atr'] = ta.atr(data['high'], data['low'], data['close'], length=14)
         
-        # Bollinger Width (Volatilidad)
         bb = ta.bbands(data['close'], length=20)
         data['bb_width'] = (bb['BBU_20_2.0'] - bb['BBL_20_2.0']) / bb['BBM_20_2.0']
         
-        # Momentum (Cambio de precio)
-        data['pct_change'] = data['close'].pct_change()
-        data['pct_change_3'] = data['close'].pct_change(3)
-        
-        # 3. Features Estructurales y Volumen (NUEVO)
-        # Distancia a SMA 50 (¿Estamos muy extendidos?)
+        # --- 3. Features Relativos (Normalizados) ---
+        # Distancia a SMA 50 en %
         sma50 = ta.sma(data['close'], length=50)
         data['dist_sma50'] = (data['close'] - sma50) / sma50
         
-        # Volumen Relativo (¿Es un movimiento con fuerza real?)
+        # Volumen Relativo
         vol_sma = ta.sma(data['volume'], length=20)
         data['volume_rel'] = data['volume'] / vol_sma
         
-        # Lags importantes (RSI de ayer)
-        data['rsi_lag'] = data['rsi'].shift(1) # Cambio 3 dias
+        # --- 4. Lags (Memoria de corto plazo) ---
+        # "Lo que pasó ayer y anteayer importa"
+        for col in ['rsi', 'macdhist', 'volume_rel']:
+            data[f'{col}_lag1'] = data[col].shift(1)
         
-        # 2. Target (Lo que queremos predecir)
-        # Predecimos si el cierre de MAÑANA será mayor que el cierre de HOY
-        data['target'] = (data['close'].shift(-1) > data['close']).astype(int)
+        # --- 5. TARGET (Lo que queremos predecir) ---
+        # V2: Solo buscamos movimientos que superen 0.5 * ATR (Evitar ruido)
+        # Queremos predecir la próxima vela (shift -1)
+        future_close = data['close'].shift(-1)
+        current_close = data['close']
+        threshold = data['atr'] * 0.5 # Umbral de volatilidad mínima
+        
+        # Target 1: Subida Significativa
+        # Target 0: Ruido o Bajada
+        data['target'] = np.where(future_close > (current_close + threshold), 1, 0)
         
         data.dropna(inplace=True)
         return data
 
     def predict(self, df):
         """
-        Entrena y predice la probabilidad de subida para la vela actual (última).
+        Entrena y predice la probabilidad de subida significativa.
         """
         try:
-            if len(df) < 100:
-                return None # Datos insuficientes
+            # Necesitamos más datos para ML (mínimo histórico)
+            if len(df) < 150:
+                return None 
             
-            # Preparar datos
             full_data = self.prepare_data(df)
             
-            # Separar datos pasados (entrenamiento) de la vela actual (predicción)
-            # La vela actual NO tiene target (no sabemos el futuro), pero si tiene features
-            # Usamos todas las velas MENOS la última para entrenar
             features = [
-                'rsi', 'rsi_lag', 
-                'macd', 'macdhist', 
+                'rsi', 'rsi_lag1', 
+                'macd', 'macdhist', 'macdhist_lag1',
                 'bb_width', 
-                'pct_change', 'pct_change_3', 
                 'adx', 'adx_slope',
-                'dist_sma50', 'volume_rel'
+                'dist_sma50', 'volume_rel', 'volume_rel_lag1'
             ]
-            X = full_data[features].iloc[:-1]
+            
+            # Verificar que existan las columnas
+            available_features = [f for f in features if f in full_data.columns]
+            
+            # Split Train/Test (Test es la vela actual desconocida)
+            # Entrenamos con TODO el pasado excepto la última vela (que no tiene futuro conocido aun)
+            X = full_data[available_features].iloc[:-1]
             y = full_data['target'].iloc[:-1]
             
-            # La vela actual para predecir (features de hoy)
-            last_candle_features = full_data[features].iloc[-1:]
+            # La vela actual para inferencia
+            last_candle_features = full_data[available_features].iloc[-1:]
             
-            if len(X) < 50:
-                return None
+            if len(X) < 100: return None
                 
-            # Entrenar (Training al vuelo)
+            # Entrenar
             self.model.fit(X, y)
             
-            # Predecir Probabilidad (Clase 1 = Subida)
-            proba = self.model.predict_proba(last_candle_features)[0][1]
+            # Métricas de calidad del modelo (OOB Error)
+            # Si el modelo no puede generalizar (score bajo), reducimos la confianza
+            quality_score = self.model.oob_score_ 
             
-            # Score de Confianza (Feature Importance opcional)
+            # Predecir
+            proba_up = self.model.predict_proba(last_candle_features)[0][1]
             
-            direction = "ALCISTA" if proba > 0.5 else "BAJISTA"
-            confidence = proba * 100 if proba > 0.5 else (1 - proba) * 100
+            # Lógica de Decisión V2
+            direction = "NEUTRAL"
+            confidence = 0.0
             
+            if proba_up > 0.55: 
+                direction = "ALCISTA"
+                confidence = proba_up * 100
+            elif proba_up < 0.45: 
+                direction = "BAJISTA"
+                confidence = (1 - proba_up) * 100
+            else:
+                # Neutral: La confianza es cuan cerca estamos del 50% (incertidumbre pura)
+                # Opcional: mostrar complementario o 0
+                confidence = (1 - abs(proba_up - 0.5) * 2) * 100 
+
             return {
                 "direction": direction,
-                "probability": round(confidence, 1),
-                "raw_score": round(proba, 4)
+                "probability": round(confidence, 1), # Ahora enviamos Confianza Human-Readable
+                "model_accuracy": round(quality_score * 100, 1) 
             }
             
         except Exception as e:

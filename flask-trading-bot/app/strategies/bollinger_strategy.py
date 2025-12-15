@@ -29,9 +29,15 @@ class BollingerStrategy(BaseStrategy):
     def populate_entry_trend(self, dataframe):
         dataframe['enter_long'] = 0
         
-        # Regla simple: Precio cruza por debajo de la banda inferior
+        # Regla MEJORADA: Reversión a la media con Confirmación
+        # 1. Precio cerró por debajo de la banda inferior (Sobreventa extrema)
+        # 2. La vela actual es VERDE (Intento de recuperación)
+        # 3. Opcional: El cierre recuperó la banda (Cierre > Lower Band) -> Más seguro
+        
         conditions = (
-            (dataframe['close'] < dataframe['bb_lower'])
+            (dataframe['close'].shift(1) < dataframe['bb_lower'].shift(1)) & # Ayer cayó fuerte
+            (dataframe['close'] > dataframe['open']) & # Hoy es verde (freno)
+            (dataframe['close'] > dataframe['bb_lower']) # Hoy recuperó el nivel
         )
         
         dataframe.loc[conditions, 'enter_long'] = 1
