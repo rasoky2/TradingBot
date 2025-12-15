@@ -12,7 +12,13 @@ class AIPredictor:
     """
     
     def __init__(self):
-        self.model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
+        self.model = RandomForestClassifier(
+            n_estimators=100, 
+            max_depth=5, 
+            min_samples_leaf=5,
+            max_features='sqrt',
+            random_state=42
+        )
 
     def prepare_data(self, df):
         """

@@ -308,6 +308,43 @@ def analyze_pair(pair: str):
     except Exception as e:
         print(f"AI Error: {e}")
 
+    # --- Generación de Contexto para LLM (Prompt Ready) ---
+    llm_context = ""
+    try:
+        # Definir columnas ideales
+        ideal_cols = ['date', 'open', 'high', 'low', 'close', 'volume', 'rsi', 'adx', 'regime', 'bb_lower', 'bb_upper', 'ema_26', 'macd', 'macdhist']
+        
+        # Filtrar solo las que existen en el dataframe actual
+        available_cols = [c for c in ideal_cols if c in df.columns]
+        
+        # Generar tabla segura
+        last_df_str = df[available_cols].tail(15).to_string(index=False)
+        
+        llm_context = f"""ACTÚA COMO UN EXPERTO EN TRADING ALGORÍTMICO.
+Analiza estos datos técnicos de {pair} (1D) y valida mi estrategia.
+
+1. DATOS DE MERCADO & INDICADORES (Últimas 15 velas):
+{last_df_str}
+
+2. ANÁLISIS AUTOMATIZADO ACTUAL:
+- Precio: {latest_close}
+- Filtro de Régimen: {swing_data.get('regime', 'N/A')} (CryptoSwing V1)
+- ADX Strength: {swing_data.get('adx', 'N/A')}
+
+3. SEÑALES ESTRATÉGICAS DETECTADAS:
+"""
+        for s in detailed_results:
+            llm_context += f"- {s['name']}: {s['signal']} (Reliability: {s['reliability']}%)\n"
+
+        if ai_result:
+            llm_context += f"\n4. PREDICCIÓN ML (Random Forest):\n- Dirección: {ai_result['direction']}\n- Confianza: {ai_result['probability']}%\n"
+
+        llm_context += "\nTAREA: Basado en la tabla de datos y las señales, ¿cuál es tu veredicto técnico? ¿Hay alguna divergencia que el bot no esté viendo?"
+    
+    except Exception as e:
+        print(f"Error generando LLM Context: {e}")
+        llm_context = "Error generando contexto. Ver logs."
+
     return jsonify({
         "pair": pair,
         "price": latest_close,
@@ -316,15 +353,18 @@ def analyze_pair(pair: str):
         
         # Datos Core para Header
         "regime": "MULTI-STRAT", 
-        "adx": 0, # Ya está en el detalle si se quiere
+        "adx": 0, 
         
         # AI DATA
         "ai_analysis": ai_result,
+        
+        # LLM EXPORT DATA
+        "llm_context": llm_context,
 
         # LISTA COMPLETA DE ESTRATEGIAS
         "strategies": detailed_results,
         
-        # Compatibilidad UI Vieja (si algo queda)
+        # Compatibilidad UI Vieja
         "levels": swing_data["levels"],
         "support": swing_data["levels"]["stop"],
         "resistance": swing_data["levels"]["target"]

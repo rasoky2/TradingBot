@@ -175,7 +175,13 @@ endblock %} {% block content %}
             <i data-lucide="layers" class="w-5 h-5 text-purple-600"></i>
             Consejo de Estrategias (24H)
         </h3>
-        <span class="text-xs text-gray-400">Actualizado en tiempo real</span>
+        <div class="flex items-center gap-3">
+             <button onclick="copyGPTContext()" class="flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 shadow-sm rounded-md transition-all active:scale-95 group">
+                <i data-lucide="clipboard-copy" class="w-3.5 h-3.5 text-gray-400 group-hover:text-purple-600"></i>
+                Copiar Análisis (GPT)
+             </button>
+             <span class="text-xs text-gray-400">Actualizado en tiempo real</span>
+        </div>
     </div>
     <div id="strategies-matrix" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- JS Injection Target -->
@@ -193,6 +199,29 @@ endblock %} {% block content %}
   let candleSeries;
   let ws;
   let lastPrice = 0;
+  let lastAnalysisData = null; // Almacena el último JSON completo
+
+  // Función para copiar contexto a ChatGPT
+  function copyGPTContext() {
+      if (!lastAnalysisData || !lastAnalysisData.llm_context) {
+          alert("Primero debes cargar un análisis (espera a que actualice).");
+          return;
+      }
+      navigator.clipboard.writeText(lastAnalysisData.llm_context).then(() => {
+          const btn = document.querySelector("button[onclick='copyGPTContext()']");
+          if(btn) {
+              const originalHTML = btn.innerHTML;
+              btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5 text-green-500"></i> Copiado!`;
+              setTimeout(() => {
+                 btn.innerHTML = originalHTML;
+                 lucide.createIcons();
+              }, 2000);
+          }
+      }).catch(err => {
+          console.error("Error al copiar:", err);
+          alert("Error al copiar al portapapeles");
+      });
+  }
 
   // Inicializar gráfico
   function initChart() {
@@ -331,6 +360,8 @@ endblock %} {% block content %}
       const response = await fetch("/api/analysis/BTC/USDT");
       if (!response.ok) throw new Error("Error analysis");
       const data = await response.json();
+      
+      lastAnalysisData = data; // Almacenar para Copy GPT
 
       // --- 1. Fiabilidad Global ---
       const rsiEl = document.getElementById("rsi-value");
