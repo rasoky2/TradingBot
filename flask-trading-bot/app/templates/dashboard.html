@@ -80,25 +80,34 @@ endblock %} {% block content %}
       </div>
     </div>
 
-    <!-- Tarjeta 2: Tendencia -->
-    <div
-      class="bg-white overflow-hidden shadow rounded-lg border border-gray-200 group hover:shadow-md transition-shadow"
-    >
+    <!-- Tarjeta 2: Fear & Greed Index -->
+    <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-200 group hover:shadow-md transition-shadow">
       <div class="p-5">
         <div class="flex items-center">
           <div class="flex-shrink-0">
-            <i data-lucide="trending-up" class="h-6 w-6 text-gray-400"></i>
+            <i id="fng-icon" data-lucide="gauge" class="h-6 w-6 text-gray-400"></i>
           </div>
           <div class="ml-5 w-0 flex-1">
             <dl>
-              <dt class="text-sm font-medium text-gray-500 truncate">
-                Tendencia Mercado
+              <dt class="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate mb-1">
+                Crypto Sentiment
               </dt>
               <dd>
-                <div class="text-lg font-bold text-gray-900" id="trend-market">
-                  Cargando...
+                <div class="flex items-center gap-2">
+                    <div class="text-3xl font-black text-gray-900" id="fng-value">--</div>
+                    <div class="flex flex-col leading-none">
+                        <span class="text-xs font-bold text-gray-600" id="fng-label">...</span>
+                        <span class="text-[9px] text-gray-400">Alternative.me</span>
+                    </div>
                 </div>
-                <p class="text-xs text-gray-400 mt-1">Medias Móviles Simples</p>
+                
+                <!-- Barra Gradiente F&G -->
+                <div class="w-full bg-gray-100 rounded-full h-2 mt-2 relative overflow-hidden">
+                     <!-- Fondo gradiente fijo -->
+                    <div class="absolute inset-0 bg-gradient-to-r from-red-500 via-yellow-400 to-green-500 opacity-20"></div>
+                    <!-- Indicador (Punto o Barra parcial) -->
+                    <div id="fng-bar" class="absolute top-0 bottom-0 left-0 bg-gray-800 transition-all duration-1000 w-1" style="left: 50%"></div>
+                </div>
               </dd>
             </dl>
           </div>
@@ -384,19 +393,27 @@ endblock %} {% block content %}
       // --- 2. Renderizar Estrategias Individuales ---
 
       // CORRECCIÓN: Usar la señal de la primera estrategia en lugar de data.trend
-      const trendEl = document.getElementById("trend-market");
-      if (data.strategies && data.strategies.length > 0) {
-        // Estrategia 0 es TrendStrategy
-        const mainStrat = data.strategies[0];
-        trendEl.textContent = mainStrat.signal;
-
-        // Asignar color según señal
-        trendEl.className = "text-lg font-bold"; // Reset
-        if (mainStrat.signal === "COMPRA")
-          trendEl.classList.add("text-emerald-600");
-        else if (mainStrat.signal === "VENTA")
-          trendEl.classList.add("text-red-600");
-        else trendEl.classList.add("text-gray-500");
+      // --- 2. Fear & Greed Update ---
+      if (data.fng_index) {
+          const fng = data.fng_index;
+          const val = fng.value;
+          
+          const valEl = document.getElementById('fng-value');
+          if(valEl) {
+              valEl.textContent = val;
+              document.getElementById('fng-label').textContent = fng.classification;
+              
+              // Barra de posición (Left %)
+              document.getElementById('fng-bar').style.left = `${val}%`;
+              
+              // Colores dinámicos
+              valEl.className = 'text-3xl font-black mr-2'; // Reset
+              if (val <= 25) valEl.classList.add('text-red-600'); // Extreme Fear
+              else if (val <= 45) valEl.classList.add('text-orange-500'); // Fear
+              else if (val <= 55) valEl.classList.add('text-gray-600'); // Neutral
+              else if (val <= 75) valEl.classList.add('text-emerald-500'); // Greed
+              else valEl.classList.add('text-green-600'); // Extreme Greed
+          }
       }
 
       // Crear/Actualizar Tabla de Estrategias

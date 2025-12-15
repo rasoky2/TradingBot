@@ -35,13 +35,34 @@ class AIPredictor:
         data['macd'] = macd['MACD_12_26_9']
         data['macdhist'] = macd['MACDh_12_26_9']
         
+        # ADX (Fuerza de Tendencia) - CRÍTICO
+        adx = ta.adx(data['high'], data['low'], data['close'], length=14)
+        if adx is not None and 'ADX_14' in adx:
+            data['adx'] = adx['ADX_14']
+            data['adx_slope'] = data['adx'].diff() # Pendiente
+        else:
+            data['adx'] = 0
+            data['adx_slope'] = 0
+        
         # Bollinger Width (Volatilidad)
         bb = ta.bbands(data['close'], length=20)
         data['bb_width'] = (bb['BBU_20_2.0'] - bb['BBL_20_2.0']) / bb['BBM_20_2.0']
         
         # Momentum (Cambio de precio)
         data['pct_change'] = data['close'].pct_change()
-        data['pct_change_3'] = data['close'].pct_change(3) # Cambio 3 dias
+        data['pct_change_3'] = data['close'].pct_change(3)
+        
+        # 3. Features Estructurales y Volumen (NUEVO)
+        # Distancia a SMA 50 (¿Estamos muy extendidos?)
+        sma50 = ta.sma(data['close'], length=50)
+        data['dist_sma50'] = (data['close'] - sma50) / sma50
+        
+        # Volumen Relativo (¿Es un movimiento con fuerza real?)
+        vol_sma = ta.sma(data['volume'], length=20)
+        data['volume_rel'] = data['volume'] / vol_sma
+        
+        # Lags importantes (RSI de ayer)
+        data['rsi_lag'] = data['rsi'].shift(1) # Cambio 3 dias
         
         # 2. Target (Lo que queremos predecir)
         # Predecimos si el cierre de MAÑANA será mayor que el cierre de HOY
@@ -64,11 +85,19 @@ class AIPredictor:
             # Separar datos pasados (entrenamiento) de la vela actual (predicción)
             # La vela actual NO tiene target (no sabemos el futuro), pero si tiene features
             # Usamos todas las velas MENOS la última para entrenar
-            X = full_data[['rsi', 'macd', 'macdhist', 'bb_width', 'pct_change', 'pct_change_3']].iloc[:-1]
+            features = [
+                'rsi', 'rsi_lag', 
+                'macd', 'macdhist', 
+                'bb_width', 
+                'pct_change', 'pct_change_3', 
+                'adx', 'adx_slope',
+                'dist_sma50', 'volume_rel'
+            ]
+            X = full_data[features].iloc[:-1]
             y = full_data['target'].iloc[:-1]
             
             # La vela actual para predecir (features de hoy)
-            last_candle_features = full_data[['rsi', 'macd', 'macdhist', 'bb_width', 'pct_change', 'pct_change_3']].iloc[-1:]
+            last_candle_features = full_data[features].iloc[-1:]
             
             if len(X) < 50:
                 return None

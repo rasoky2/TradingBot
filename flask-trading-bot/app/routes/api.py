@@ -108,6 +108,41 @@ def status():
     })
 
 
+
+# --- Cache Global para Fear & Greed ---
+fng_cache = { "value": None, "timestamp": 0 }
+
+def get_fear_and_greed():
+    """Obtiene el índice de Miedo y Codicia con caché de 1 hora"""
+    import time
+    import requests
+    
+    global fng_cache
+    now = time.time()
+    
+    # Si el caché es válido (menos de 1 hora/3600s), devolverlo
+    if fng_cache["value"] and (now - fng_cache["timestamp"] < 3600):
+        return fng_cache["value"]
+        
+    try:
+        # API Pública Gratuita
+        url = "https://api.alternative.me/fng/"
+        r = requests.get(url, timeout=5)
+        data = r.json()
+        if data.get('data'):
+            item = data['data'][0]
+            fng_cache["value"] = {
+                "value": int(item['value']),
+                "classification": item['value_classification']
+            }
+            fng_cache["timestamp"] = now
+            return fng_cache["value"]
+    except Exception as e:
+        print(f"Error F&G API: {e}")
+        
+    # Retorno por defecto si falla
+    return {"value": 50, "classification": "Neutral"}
+
 @api_bp.route('/analysis/<path:pair>', methods=['GET'])
 @handle_errors
 def analyze_pair(pair: str):
@@ -130,6 +165,10 @@ def analyze_pair(pair: str):
     
     df_base = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     latest_close = df_base['close'].iloc[-1]
+    
+    # Fear & Greed (Psicología)
+    fng_index = get_fear_and_greed()
+    
     last_atr = 0
     
     # Lista de Estrategias a consultar
@@ -145,6 +184,7 @@ def analyze_pair(pair: str):
     # Variables globales para el resumen
     global_signal = "NEUTRAL"
     global_reliability = 50
+    master_df = None
     
     for meta in strategy_instances:
         # Copia fresca para cálculos
@@ -155,6 +195,8 @@ def analyze_pair(pair: str):
         df = strategy.populate_indicators(df)
         df = strategy.populate_entry_trend(df)
         df = strategy.populate_exit_trend(df)
+        
+        if meta["main"]: master_df = df.copy()
         
         last = df.iloc[-1]
         
@@ -311,27 +353,47 @@ def analyze_pair(pair: str):
     # --- Generación de Contexto para LLM (Prompt Ready) ---
     llm_context = ""
     try:
-        # Definir columnas ideales
-        ideal_cols = ['date', 'open', 'high', 'low', 'close', 'volume', 'rsi', 'adx', 'regime', 'bb_lower', 'bb_upper', 'ema_26', 'macd', 'macdhist']
+        # Usar master_df (Swing V1) preferiblemente
+        context_df = master_df if master_df is not None else df
         
-        # Filtrar solo las que existen en el dataframe actual
-        available_cols = [c for c in ideal_cols if c in df.columns]
+        # --- Enriquecimiento de Datos para GPT (On-the-fly) ---
+        # 1. Volumen Relativo (vs media 20)
+        v_sma = context_df['volume'].rolling(20).mean()
+        context_df['vol_rel'] = (context_df['volume'] / v_sma).round(2)
         
-        # Generar tabla segura
-        last_df_str = df[available_cols].tail(15).to_string(index=False)
+        # 2. Distancia SMA 50 (Extensión)
+        sma50 = context_df['close'].rolling(50).mean()
+        context_df['dist_sma50%'] = ((context_df['close'] - sma50) / sma50 * 100).round(2)
         
-        llm_context = f"""ACTÚA COMO UN EXPERTO EN TRADING ALGORÍTMICO.
-Analiza estos datos técnicos de {pair} (1D) y valida mi estrategia.
+        # 3. Patrón Doji (Indecisión)
+        body = (context_df['close'] - context_df['open']).abs()
+        rng = (context_df['high'] - context_df['low'])
+        context_df['is_doji'] = (body / rng < 0.1).astype(int)
+        
+        # Definir columnas ideales (Ordenadas para CSV - Máxima densidad de información)
+        columns_ordered = [
+            'date', 'close', 'rsi', 'adx', 'adx_slope', 'regime', 
+            'macdhist', 'vol_rel', 'dist_sma50%', 'is_doji'
+        ]
+        
+        # Filtrar disponibles
+        final_cols = [c for c in columns_ordered if c in context_df.columns]
+        
+        # Generar CSV Compacto y Limpio (| separator saves tokens vs spaces)
+        last_df_str = context_df[final_cols].tail(15).to_csv(index=False, sep='|', float_format="%.2f", lineterminator="\n")
+        
+        llm_context = f"""ACTÚA COMO UN EXPERTO EN TRADING (Quant/Technical).
+Analiza este dataset compacto (CSV) de {pair} (1D).
 
-1. DATOS DE MERCADO & INDICADORES (Últimas 15 velas):
+1. DATASET TÉCNICO COMPACTO (Últimas 15 velas):
 {last_df_str}
 
-2. ANÁLISIS AUTOMATIZADO ACTUAL:
+2. SIGNALS & REGIME:
 - Precio: {latest_close}
-- Filtro de Régimen: {swing_data.get('regime', 'N/A')} (CryptoSwing V1)
+- Regime: {swing_data.get('regime', 'N/A')}
 - ADX Strength: {swing_data.get('adx', 'N/A')}
 
-3. SEÑALES ESTRATÉGICAS DETECTADAS:
+3. DETECTED SIGNALS:
 """
         for s in detailed_results:
             llm_context += f"- {s['name']}: {s['signal']} (Reliability: {s['reliability']}%)\n"
@@ -357,6 +419,7 @@ Analiza estos datos técnicos de {pair} (1D) y valida mi estrategia.
         
         # AI DATA
         "ai_analysis": ai_result,
+        "fng_index": fng_index,
         
         # LLM EXPORT DATA
         "llm_context": llm_context,
