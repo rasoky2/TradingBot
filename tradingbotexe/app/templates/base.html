@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="business">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Flask Trading Bot{% endblock %}</title>
+    <link
+      rel="icon"
+      type="image/x-icon"
+      href="{{ url_for('static', filename='favicon.ico') }}"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      href="{{ url_for('static', filename='favicon.png') }}"
+    />
+
+    <!-- Fuente Inter (Estándar Fintech) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- DaisyUI -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css"
+      rel="stylesheet"
+      type="text/css"
+    />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["IBM Plex Sans", "sans-serif"],
+            },
+            colors: {
+              primary: "#2563eb", // Blue 600
+              success: "#10b981", // Emerald 500
+              danger: "#ef4444", // Red 500
+              warning: "#f59e0b", // Amber 500
+              dark: "#111827", // Gray 900
+            },
+          },
+        },
+      };
+    </script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Estilos Personalizados (mínimos para overriding) -->
+    <style>
+      body {
+        font-family: "IBM Plex Sans", sans-serif;
+      }
+      .glass-panel {
+        /* DaisyUI tiene glass glass-pane utilities y backdrop-blur que podemos usar */
+        @apply backdrop-blur-md bg-base-100/50 border border-base-content/10;
+      }
+    </style>
+    {% block extra_css %}{% endblock %}
+  </head>
+  <body class="min-h-screen flex flex-col bg-base-200 text-base-content">
+    <!-- Navbar con diseño profesional (DaisyUI) -->
+    <div class="navbar bg-base-100 shadow-lg sticky top-0 z-50">
+      <div class="navbar-start">
+        <div class="dropdown">
+          <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
+            <i data-lucide="menu" class="h-5 w-5"></i>
+          </div>
+          <ul
+            tabindex="0"
+            class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow"
+          >
+            <li><a href="/">Dashboard</a></li>
+          </ul>
+        </div>
+        <a
+          href="/"
+          class="btn btn-ghost text-xl gap-2 font-bold tracking-tight"
+        >
+          <i data-lucide="bot" class="text-primary w-6 h-6"></i>
+          {{ config.bot_name }}
+        </a>
+      </div>
+
+      <div class="navbar-center hidden lg:flex">
+        <ul class="menu menu-horizontal px-1">
+          <li>
+            <a href="/" class="font-medium hover:text-primary transition-colors"
+              >Dashboard</a
+            >
+          </li>
+        </ul>
+      </div>
+
+      <div class="navbar-end gap-2"></div>
+    </div>
+
+    <!-- Contenido Principal -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {% block content %}{% endblock %}
+    </main>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+      // Inicializar Iconos Lucide
+      lucide.createIcons();
+    </script>
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>
